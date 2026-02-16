@@ -55,6 +55,105 @@ const registerFaculty = async (req, res) => {
 };
 
 
+export const registerManyFaculty = async (req, res) => {
+  try {
+    const { faculties } = req.body;
+
+    if (!Array.isArray(faculties) || faculties.length === 0) {
+      return res.json({
+        success: false,
+        message: "Faculty array is required"
+      });
+    }
+
+    const inserted = [];
+    const skipped = [];
+
+    for (const faculty of faculties) {
+      const {
+        name,
+        email,
+        password,
+        employeeId,
+        designation,
+        department,
+        phone,
+        address
+      } = faculty;
+
+      // 🔹 Validate fields
+      if (
+        !name || !email || !password || !employeeId ||
+        !designation || !department || !phone || !address
+      ) {
+        skipped.push({ email, reason: "Missing fields" });
+        continue;
+      }
+
+      // 🔹 Check existing email or employeeId
+      const exists = await Faculty.findOne({
+        $or: [{ email }, { employeeId }]
+      });
+
+      if (exists) {
+        skipped.push({ email, reason: "Already exists" });
+        continue;
+      }
+
+      // 🔹 Hash password
+      const hashedPassword = await bcrypt.hash(password, 10);
+
+      // 🔹 Create faculty
+      const newFaculty = await Faculty.create({
+        name,
+        email,
+        password: hashedPassword,
+        employeeId,
+        designation,
+        department,
+        phone,
+        address
+      });
+
+      inserted.push({
+        facultyId: newFaculty._id,
+        email: newFaculty.email
+      });
+
+      // 🔹 Optional email (safe to comment for bulk load)
+      /*
+      await sendEmail({
+        to: email,
+        subject: "Welcome to Course Registration Portal",
+        html: `
+          <h2>Hello ${name},</h2>
+          <p>Your faculty account has been created successfully.</p>
+          <p>Regards,<br>MNIT Registration Team</p>
+        `
+      });
+      */
+    }
+
+    res.json({
+      success: true,
+      message: "Bulk Faculty Registration Completed",
+      insertedCount: inserted.length,
+      skippedCount: skipped.length,
+      inserted,
+      skipped
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.json({
+      success: false,
+      message: "Bulk registration failed"
+    });
+  }
+};
+
+
+
 // ✅ LOGIN FACULTY
 const loginFaculty = async (req, res) => {
     try {

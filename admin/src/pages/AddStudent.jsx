@@ -12,14 +12,17 @@ const AddStudent = () => {
     email: "",
     password: "",
     phone: "",
-    age: "",
     fathersName: "",
-    address: "",
-    currentSem: "",
+    fatherPhone: "",
+    gender: "",
+    city: "",
+    state: "",
+    age: "",
     dob: "",
     batch: "",
     programme: "",
     department: "",
+    currentSem: ""
   });
 
   const [loading, setLoading] = useState(false);
@@ -38,10 +41,17 @@ const AddStudent = () => {
       const token = localStorage.getItem("adminToken");
 
       const res = await axios.post(
-        "http://localhost:3000/admin/add-student",
-        student,
+        "http://localhost:3000/student/register",
         {
-          headers: { Authorization: `Bearer ${token}` },
+          ...student,
+          phone: Number(student.phone),
+          fatherPhone: Number(student.fatherPhone),
+          age: Number(student.age),
+          batch: Number(student.batch),
+          currentSem: Number(student.currentSem)
+        },
+        {
+          headers: { Authorization: `Bearer ${token}` }
         }
       );
 
@@ -54,20 +64,23 @@ const AddStudent = () => {
           email: "",
           password: "",
           phone: "",
-          age: "",
           fathersName: "",
-          address: "",
-          currentSem: "",
+          fatherPhone: "",
+          gender: "",
+          city: "",
+          state: "",
+          age: "",
           dob: "",
           batch: "",
           programme: "",
           department: "",
+          currentSem: ""
         });
       } else {
         setMsg(res.data.message);
       }
     } catch (err) {
-      console.log(err);
+      console.error(err);
       setMsg("Failed to add student.");
     }
 
@@ -86,165 +99,72 @@ const AddStudent = () => {
 
           <form
             onSubmit={handleSubmit}
-            className="bg-white p-8 rounded-xl shadow-md w-full max-w-2xl"
+            className="bg-white p-8 rounded-xl shadow-md w-full max-w-3xl"
           >
             <div className="grid grid-cols-2 gap-4">
 
-              <Input
-                label="Full Name"
-                name="name"
-                value={student.name}
-                onChange={handleChange}
-                placeholder="Enter full name"
-              />
+              <Input label="Full Name" name="name" value={student.name} onChange={handleChange} />
+              <Input label="College ID" name="collegeId" value={student.collegeId} onChange={handleChange} />
+              <Input label="Email" type="email" name="email" value={student.email} onChange={handleChange} />
+              <Input label="Password" type="password" name="password" value={student.password} onChange={handleChange} />
+              <Input label="Phone" name="phone" value={student.phone} onChange={handleChange} />
+              <Input label="Father's Name" name="fathersName" value={student.fathersName} onChange={handleChange} />
+              <Input label="Father Phone" name="fatherPhone" value={student.fatherPhone} onChange={handleChange} />
 
-              <Input
-                label="College ID"
-                name="collegeId"
-                value={student.collegeId}
-                onChange={handleChange}
-                placeholder="2023UCPxxxx"
-              />
+              {/* Gender */}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold">Gender</label>
+                <select name="gender" value={student.gender} onChange={handleChange}
+                  className="border px-3 py-2 rounded-md">
+                  <option value="">Select</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                </select>
+              </div>
 
-              <Input
-                label="Email"
-                type="email"
-                name="email"
-                value={student.email}
-                onChange={handleChange}
-                placeholder="Enter email"
-              />
+              <Input label="City" name="city" value={student.city} onChange={handleChange} />
+              <Input label="State" name="state" value={student.state} onChange={handleChange} />
 
-              <Input
-                label="Password"
-                type="password"
-                name="password"
-                value={student.password}
-                onChange={handleChange}
-                placeholder="Enter password"
-              />
+              <Input label="Age" type="number" name="age" value={student.age} onChange={handleChange} />
+              <Input label="Date of Birth" type="date" name="dob" value={student.dob} onChange={handleChange} />
+              <Input label="Batch" type="number" name="batch" value={student.batch} onChange={handleChange} />
+              <Input label="Current Semester" type="number" name="currentSem" value={student.currentSem} onChange={handleChange} />
 
-              <Input
-                label="Phone"
-                name="phone"
-                value={student.phone}
-                onChange={handleChange}
-                placeholder="Enter phone number"
-              />
-
-              <Input
-                label="Age"
-                name="age"
-                type="number"
-                value={student.age}
-                onChange={handleChange}
-                placeholder="Enter age"
-              />
-
-              <Input
-                label="Father's Name"
-                name="fathersName"
-                value={student.fathersName}
-                onChange={handleChange}
-                placeholder="Enter father's name"
-              />
-
-              <Input
-                label="Address"
-                name="address"
-                value={student.address}
-                onChange={handleChange}
-                placeholder="Enter address"
-              />
-
-              <Input
-                label="Current Semester"
-                name="currentSem"
-                type="number"
-                value={student.currentSem}
-                onChange={handleChange}
-                placeholder="1–8"
-              />
-
-              <Input
-                label="Date of Birth"
-                name="dob"
-                type="date"
-                value={student.dob}
-                onChange={handleChange}
-              />
-
-              <Input
-                label="Batch Year"
-                name="batch"
-                type="number"
-                value={student.batch}
-                onChange={handleChange}
-                placeholder="e.g. 2022"
-              />
-
-              {/* Programme dropdown */}
-              <div className="flex flex-col gap-1 mb-4">
-                <label className="text-sm font-semibold text-gray-700">Programme</label>
-                <select
-                  name="programme"
-                  value={student.programme}
-                  onChange={handleChange}
-                  className="border px-3 py-2 rounded-md focus:ring-2 outline-none focus:ring-indigo-500"
-                >
-                  <option value="">Select programme</option>
-                  <option value="B.tech">B.Tech</option>
-                  <option value="M.tech">M.Tech</option>
+              {/* Programme */}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold">Programme</label>
+                <select name="programme" value={student.programme} onChange={handleChange}
+                  className="border px-3 py-2 rounded-md">
+                  <option value="">Select</option>
+                  <option value="B.Tech">B.Tech</option>
+                  <option value="M.Tech">M.Tech</option>
                   <option value="MBA">MBA</option>
                   <option value="PhD">PhD</option>
                   <option value="M.Sc">M.Sc</option>
                 </select>
               </div>
 
-              {/* Department dropdown */}
-                <div className="flex flex-col gap-1 mb-4">
-                <label className="text-sm font-semibold text-gray-700">Department</label>
-                <select
-                    name="department"
-                    value={student.department}
-                    onChange={handleChange}
-                    className="border px-3 py-2 rounded-md focus:ring-2 outline-none focus:ring-indigo-500"
-                >
-                    <option value="">Select Department</option>
-
-                    {/* Engineering Departments */}
-                    <option value="Computer Science and Engineering">Computer Science and Engineering (CSE)</option>
-                    <option value="Electronics and Communication Engineering">Electronics and Communication Engineering (ECE)</option>
-                    <option value="Electrical Engineering">Electrical Engineering (EE)</option>
-                    <option value="Mechanical Engineering">Mechanical Engineering (ME)</option>
-                    <option value="Civil Engineering">Civil Engineering (CE)</option>
-                    <option value="Chemical Engineering">Chemical Engineering (CHE)</option>
-                    <option value="Metallurgical and Materials Engineering">Metallurgical & Materials Engineering (MME)</option>
-                    <option value="Architecture and Planning">Architecture & Planning</option>
-                    <option value="Information Technology">Information Technology (IT)</option>
-                    <option value="Artificial Intelligence and Data Science">AI & Data Science</option>
-
-                    {/* Science Departments */}
-                    <option value="Physics">Physics</option>
-                    <option value="Chemistry">Chemistry</option>
-                    <option value="Mathematics">Mathematics</option>
-
-                    {/* Management & Humanities */}
-                    <option value="Management Studies">Management Studies (MBA)</option>
-                    <option value="Humanities and Social Sciences">Humanities & Social Sciences</option>
+              {/* Department */}
+              <div className="flex flex-col gap-1">
+                <label className="text-sm font-semibold">Department</label>
+                <select name="department" value={student.department} onChange={handleChange}
+                  className="border px-3 py-2 rounded-md">
+                  <option value="">Select</option>
+                  <option value="Computer Science and Engineering">Computer Science & Engineering</option>
+                  <option value="Electronics and Communication Engineering">Electronics & Communication Engineering</option>
+                  <option value="Electrical Engineering">Electrical Engineering</option>
+                  <option value="Mechanical Engineering">Mechanical Engineering</option>
+                  <option value="Civil Engineering">Civil Engineering</option>
                 </select>
-                </div>
-
+              </div>
 
             </div>
 
-            {msg && (
-              <p className="mt-3 text-center text-red-500 font-semibold">{msg}</p>
-            )}
+            {msg && <p className="mt-3 text-center text-red-500">{msg}</p>}
 
             <button
               disabled={loading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded-md text-lg mt-5 disabled:opacity-50"
+              className="w-full bg-indigo-600 text-white py-2 rounded-md mt-6"
             >
               {loading ? "Adding..." : "Add Student"}
             </button>

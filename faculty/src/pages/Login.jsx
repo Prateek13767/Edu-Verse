@@ -90,7 +90,7 @@ const Login = () => {
           {/* Submit */}
           <button
             type="submit"
-            className="flex items-center justify-center w-full bg-blue-600 text-white py-2 rounded-xl font-semibold hover:bg-blue-700 transition-all duration-200"
+            className="flex items-center justify-center w-full bg-blue-600 text-white py-2 rounded-xl font-semibold hover:bg-blue-700 transition-all duration-200 cursor-pointer"
           >
             <LogIn className="mr-2" size={18} />
             Login

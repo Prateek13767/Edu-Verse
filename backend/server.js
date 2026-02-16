@@ -14,6 +14,12 @@ import gradeRouter from "./routes/GradeRouter.js";
 import adminRouter from "./routes/AdminRouter.js";
 import academicCalendarRouter from "./routes/AcademicCalendarRouter.js";
 import settingsRouter from "./routes/SettingsRouter.js";
+import hostelRouter from "./routes/HostelRouter.js";
+import roomRouter from "./routes/RoomRouter.js";
+import wardenRouter from "./routes/WardenRouter.js";
+import roomAllotmentRouter from "./routes/RoomAllotmentRouter.js";
+import willingnessRouter from "./routes/WillingnessRouter.js";
+import complaintRouter from "./routes/ComplaintRouter.js";
 
 const app = express();
 const PORT = process.env.PORT;
@@ -34,6 +40,12 @@ app.use("/grade",gradeRouter);
 app.use("/admin",adminRouter);
 app.use("/academiccalendar",academicCalendarRouter);
 app.use("/settings",settingsRouter);
+app.use("/hostel",hostelRouter);
+app.use("/room",roomRouter);
+app.use("/willingness",willingnessRouter);
+app.use("/roomallotment",roomAllotmentRouter);
+app.use("/warden",wardenRouter);
+app.use("/complaint",complaintRouter);
 
 app.listen(PORT, () => {
     console.log(`Server is listening to PORT ${PORT}`);

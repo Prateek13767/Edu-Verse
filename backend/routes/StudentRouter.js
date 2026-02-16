@@ -8,7 +8,8 @@ import {
     getStudentAttendance,
     getStudentCGPA,
     getStudentByFilter,
-    registerMany
+    registerMany,
+    downloadGradeSheet
 } from "../controllers/StudentController.js";
 
 const studentRouter = express.Router();
@@ -23,6 +24,7 @@ studentRouter.get("/", getAllStudents);
 
 
 studentRouter.post("/filter",getStudentByFilter);
+
 studentRouter.get("/:id", getStudentById);
 
 // Student courses
@@ -30,7 +32,7 @@ studentRouter.get("/:id/courses", getStudentCourses);
 
 // Attendance (optional courseId filter)
 studentRouter.get("/:id/attendance", getStudentAttendance);
-
+studentRouter.get("/download/:studentId/:semester",downloadGradeSheet);
 // CGPA (needs auth middleware to set req.userId)
 studentRouter.get("/:id/cgpa", getStudentCGPA);
 

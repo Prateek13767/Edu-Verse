@@ -8,10 +8,10 @@ import Footer from "../components/Footer";
 const branchList = [
   "Computer Science and Engineering",
   "Electronics and Communication Engineering",
-  "Electrical and Electronics Engineering",
+  "Electrical Engineering",
   "Mechanical Engineering",
   "Civil Engineering",
-  "Metallurgical Engineering",
+  "Chemical Engineering"
 ];
 
 const AddCourseOffering = () => {
@@ -269,7 +269,7 @@ const AddCourseOffering = () => {
             {/* Submit */}
             <button
               type="submit"
-              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold"
+              className="bg-green-600 text-white px-6 py-3 rounded-lg font-semibold cursor-pointer"
             >
               ➕ Add Course Offering
             </button>

@@ -12,33 +12,42 @@ const Courses = () => {
 
   const [availableCourses, setAvailableCourses] = useState([]);
   const [selected, setSelected] = useState([]);
-  const [enrollmentStatus, setEnrollmentStatus] = useState({}); // { offeringId : status }
+  const [enrollmentStatus, setEnrollmentStatus] = useState({}); // { offeringId: status }
 
-  // 🔹 Fetch available offerings
+  // 🔹 Fetch available course offerings
   const fetchCourses = async () => {
-    if (!student?.department || !student?.currentSem) return;
+    if (!student?.department || !student?.currentSem || !settings) return;
+
     try {
       const { data } = await axios.post(
         `${backendUrl}/courseoffering/filter`,
         {
           branch: student.department,
           semester: student.currentSem,
-          year: new Date().getFullYear(),
+          academicYear: settings.academicYear,
+          semType: settings.currentSem
         },
         { headers: { Authorization: `Bearer ${studentToken}` } }
       );
 
+      console.log(data);
+      
+
       if (data.success) {
         setAvailableCourses(data.offerings || []);
-      } else toast.error(data.message);
+      } else {
+        toast.error(data.message);
+      }
     } catch {
       toast.error("Unable to load offered courses");
     }
   };
 
-  // 🔹 Fetch enrollments and map offeringId → status
+
+  // 🔹 Fetch existing enrollments and map offeringId → status
   const fetchEnrollments = async () => {
-    if (!student?._id) return;
+    if (!student?._id || !settings) return;
+
     try {
       const { data } = await axios.get(
         `${backendUrl}/enrollment/student/${student._id}`,
@@ -47,12 +56,14 @@ const Courses = () => {
 
       if (data.success) {
         const statusMap = {};
+
         data.enrollments.forEach((e) => {
           if (
             e.offering.semester === student.currentSem &&
-            e.offering.year === new Date().getFullYear()
+            e.offering.academicYear === settings.academicYear &&
+            e.offering.semType === settings.currentSem
           ) {
-            statusMap[e.offering._id] = e.status.toLowerCase(); // pending / approved / rejected / dropped
+            statusMap[e.offering._id] = e.status.toLowerCase();
           }
         });
 
@@ -63,14 +74,15 @@ const Courses = () => {
     }
   };
 
-  // initial loads
-  useEffect(() => {
-    fetchCourses();
-  }, [student]);
 
   useEffect(() => {
-    fetchEnrollments();
-  }, [student]);
+    if (student && settings) fetchCourses();
+  }, [student, settings]);
+
+  useEffect(() => {
+    if (student && settings) fetchEnrollments();
+  }, [student, settings]);
+
 
   if (!settings || !student) {
     return (
@@ -87,6 +99,7 @@ const Courses = () => {
   }
 
   const registrationOpen = settings?.isRegistrationOpen;
+  const hasSubmittedForThisSem = Object.keys(enrollmentStatus).length > 0;
 
   const totalCredits = selected.reduce((sum, id) => {
     const offering = availableCourses.find((o) => o._id === id);
@@ -98,28 +111,23 @@ const Courses = () => {
     0
   );
 
-  // One-way selection locking
+  // 🔒 One-way selection logic
   const handleCheckbox = (offeringId) => {
-    // If enrollment exists in database → always locked
+    if (hasSubmittedForThisSem) return;
     if (enrollmentStatus.hasOwnProperty(offeringId)) return;
-
-    // If already selected manually → cannot unselect
     if (selected.includes(offeringId)) return;
 
     const offering = availableCourses.find((c) => c._id === offeringId);
 
-    if (
-      !selected.includes(offeringId) &&
-      totalCredits + offering.course.credits > 30
-    ) {
+    if (totalCredits + offering.course.credits > 30) {
       toast.error("You cannot select more than 30 credits");
       return;
     }
 
-    setSelected((prev) => [...prev, offeringId]); // one-way addition only
+    setSelected((prev) => [...prev, offeringId]);
   };
 
-  // 🔥 Submit & refresh UI
+  // 🔥 Submit enrollment
   const submitEnrollment = async () => {
     if (!registrationOpen) return toast.error("Registration window is closed");
     if (selected.length === 0) return toast.error("Select at least one course");
@@ -129,16 +137,18 @@ const Courses = () => {
         `${backendUrl}/enrollment/addbulk`,
         {
           student: student._id,
-          offerings: selected,
+          offerings: selected
         },
         { headers: { Authorization: `Bearer ${studentToken}` } }
       );
 
       if (data.success) {
-        toast.success("Enrollment submitted successfully!");
+        toast.success("Registration submitted successfully!");
         setSelected([]);
-        await Promise.all([fetchCourses(), fetchEnrollments()]); // refresh UI automatically
-      } else toast.error(data.message);
+        await Promise.all([fetchCourses(), fetchEnrollments()]);
+      } else {
+        toast.error(data.message);
+      }
     } catch {
       toast.error("Something went wrong while submitting enrollment");
     }
@@ -152,9 +162,15 @@ const Courses = () => {
 
         <div className="p-6 flex justify-center">
           <div className="bg-white shadow-xl rounded-lg w-[950px] p-8">
-            <h1 className="text-3xl font-bold text-blue-700 mb-4 text-center">
+            <h1 className="text-3xl font-bold text-blue-700 mb-2 text-center">
               Course Registration
             </h1>
+
+            {hasSubmittedForThisSem && (
+              <p className="text-center text-lg font-semibold text-blue-600 mb-4">
+                Registration Submitted — Track Status Below
+              </p>
+            )}
 
             <p
               className={`text-center font-semibold text-lg mb-6 ${
@@ -204,19 +220,14 @@ const Courses = () => {
                           <input
                             type="checkbox"
                             disabled={
+                              hasSubmittedForThisSem ||
                               !registrationOpen ||
                               locked ||
                               selected.includes(off._id)
                             }
-                            checked={
-                              locked || selected.includes(off._id)
-                            }
+                            checked={locked || selected.includes(off._id)}
                             onChange={() => handleCheckbox(off._id)}
-                            className={`w-5 h-5 cursor-pointer ${
-                              locked || selected.includes(off._id)
-                                ? "opacity-40 cursor-not-allowed"
-                                : ""
-                            }`}
+                            className="w-5 h-5 cursor-pointer disabled:opacity-40"
                           />
                         </td>
 
@@ -247,41 +258,22 @@ const Courses = () => {
             </table>
 
             <p className="text-right text-lg font-semibold text-gray-800 mt-6">
-              Total Selected Credits: {totalCredits} / {availableCredits} (Max 30 allowed)
+              Total Selected Credits: {totalCredits} / {availableCredits} (Max 30)
             </p>
 
-            <div className="flex justify-center mt-6">
-              <button
-                onClick={submitEnrollment}
-                disabled={!registrationOpen}
-                className={`px-8 py-3 rounded-md font-semibold text-lg transition ${
-                  registrationOpen
-                    ? "bg-blue-600 hover:bg-blue-700 text-white"
-                    : "bg-gray-400 text-gray-200 cursor-not-allowed"
-                }`}
-              >
-                Submit Registration
-              </button>
-            </div>
-
-            {selected.length > 0 && (
-              <div className="text-center mt-4 text-gray-700">
-                <p className="font-semibold mb-2">Selected Courses:</p>
-                <div className="flex flex-wrap gap-2 justify-center">
-                  {selected.map((id) => {
-                    const off = availableCourses.find((o) => o._id === id);
-                    return (
-                      off && (
-                        <span
-                          key={id}
-                          className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-sm font-medium"
-                        >
-                          {off.course.name} — {off.course.credits} credits
-                        </span>
-                      )
-                    );
-                  })}
-                </div>
+            {!hasSubmittedForThisSem && (
+              <div className="flex justify-center mt-6">
+                <button
+                  onClick={submitEnrollment}
+                  disabled={!registrationOpen}
+                  className={`px-8 py-3 rounded-md font-semibold text-lg transition ${
+                    registrationOpen
+                      ? "bg-blue-600 hover:bg-blue-700 text-white"
+                      : "bg-gray-400 text-gray-200 cursor-not-allowed"
+                  }`}
+                >
+                  Submit Registration
+                </button>
               </div>
             )}
           </div>

@@ -5,12 +5,14 @@ import {
     getAllFaculty,
     getFacultyById,
     getFacultyCourses,
-    getFacultyCoordinatingCourses
+    getFacultyCoordinatingCourses,
+    registerManyFaculty
 } from "../controllers/FacultyController.js";
 
 const facultyRouter = express.Router();
 
 facultyRouter.post("/register", registerFaculty);
+facultyRouter.post("/registermany",registerManyFaculty);
 facultyRouter.post("/login", loginFaculty);
 
 // GET ALL FACULTY

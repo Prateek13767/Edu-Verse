@@ -10,20 +10,74 @@ const AssignGrade = () => {
   const { backendUrl, faculty } = useContext(AllContext); // 👈 faculty added
 
   const gradeFields = ["assignments", "midsem", "endsem", "quiz", "project"];
+
   const [enrollments, setEnrollments] = useState([]);
   const [grades, setGrades] = useState({});
   const [loading, setLoading] = useState(false);
   const [selectedExam, setSelectedExam] = useState("");
   const [bulkMarks, setBulkMarks] = useState("");
 
-  // Fetch enrollments + grades only for this faculty
+  const [summary, setSummary] = useState(null);
+
+  const calculateSummary = (gradesObj) => {
+  const gradeList = Object.values(gradesObj).filter(
+    (g) => g?.letterGrade && typeof g.total === "number"
+  );
+
+  if (gradeList.length === 0) return null;
+
+  const totals = gradeList.map((g) => g.total);
+  const n = totals.length;
+
+  const mean = totals.reduce((a, b) => a + b, 0) / n;
+
+  const variance =
+    totals.reduce((sum, x) => sum + Math.pow(x - mean, 2), 0) / n;
+
+  const stdDev = Math.sqrt(variance);
+
+  const gradeCounts = {
+    AA: 0,
+    AB: 0,
+    BB: 0,
+    BC: 0,
+    CC: 0,
+    CD: 0,
+    DD: 0,
+    F: 0,
+  };
+
+  gradeList.forEach((g) => {
+    if (gradeCounts[g.letterGrade] !== undefined) {
+      gradeCounts[g.letterGrade]++;
+    }
+  });
+
+  return {
+    totalStudents: n,
+    mean: mean.toFixed(2),
+    stdDev: stdDev.toFixed(2),
+    gradeCounts,
+    passed: n - gradeCounts.F,
+    failed: gradeCounts.F,
+  };
+};
+
+
+  // ==================================================
+  // FETCH ENROLLMENTS + GRADES (FACULTY-SPECIFIC)
+  // ==================================================
   useEffect(() => {
     if (!offeringId || !faculty?._id) return;
 
     const fetchEnrollmentsAndGrades = async () => {
       setLoading(true);
       try {
-        const res = await axios.get(`${backendUrl}/enrollment/offering/${offeringId}`);
+        const res = await axios.get(
+          `${backendUrl}/enrollment/offering/${offeringId}`
+        );
+        
+        
         const fetchedEnrollments = res.data.enrollments || [];
 
         // 🔥 FILTER ONLY ENROLLMENTS ASSIGNED TO THIS FACULTY
@@ -36,12 +90,15 @@ const AssignGrade = () => {
         const gradesData = {};
         for (const enr of filtered) {
           try {
-            const gradeRes = await axios.get(`${backendUrl}/grade/enrollment/${enr._id}`);
+            const gradeRes = await axios.get(
+              `${backendUrl}/grade/enrollment/${enr._id}`
+            );
             gradesData[enr._id] = gradeRes.data.gradeDetails || {};
           } catch {
             gradesData[enr._id] = {};
           }
         }
+
         setGrades(gradesData);
       } catch (err) {
         console.error(err);
@@ -54,20 +111,35 @@ const AssignGrade = () => {
     fetchEnrollmentsAndGrades();
   }, [offeringId, backendUrl, faculty?._id]);
 
+  // ==================================================
+  // LOCAL GRADE CHANGE
+  // ==================================================
   const handleGradeChange = (enrollmentId, field, value) => {
     setGrades((prev) => ({
       ...prev,
-      [enrollmentId]: { ...prev[enrollmentId], [field]: Number(value) },
+      [enrollmentId]: {
+        ...prev[enrollmentId],
+        [field]: Number(value),
+      },
     }));
   };
 
-  // 🔥 Bulk Upload of Marks
+  // ==================================================
+  // BULK UPLOAD
+  // ==================================================
   const handleBulkUpload = async () => {
     if (!selectedExam) return alert("Select exam type first");
 
-    const marks = bulkMarks.split(/[, ]+/).map(Number).filter((x) => !isNaN(x));
-    if (marks.length !== enrollments.length)
-      return alert(`Expected ${enrollments.length} marks, received ${marks.length}`);
+    const marks = bulkMarks
+      .split(/[, ]+/)
+      .map(Number)
+      .filter((x) => !isNaN(x));
+
+    if (marks.length !== enrollments.length) {
+      return alert(
+        `Expected ${enrollments.length} marks, received ${marks.length}`
+      );
+    }
 
     const payload = enrollments.map((enr, i) => ({
       enrollmentId: enr._id,
@@ -75,7 +147,7 @@ const AssignGrade = () => {
     }));
 
     try {
-      await axios.post(`${backendUrl}/grade/upload-bulk`, {
+      const res=await axios.post(`${backendUrl}/grade/upload-bulk`, {
         offeringId,
         type: selectedExam,
         data: payload,
@@ -84,12 +156,19 @@ const AssignGrade = () => {
       alert("Bulk marks uploaded successfully!");
       setBulkMarks("");
 
-      // Refresh grades
+      // Refresh grades safely
       const updated = {};
       for (const enr of enrollments) {
-        const g = await axios.get(`${backendUrl}/grade/enrollment/${enr._id}`);
-        updated[enr._id] = g.data.gradeDetails || {};
+        try {
+          const g = await axios.get(
+            `${backendUrl}/grade/enrollment/${enr._id}`
+          );
+          updated[enr._id] = g.data.gradeDetails || {};
+        } catch {
+          updated[enr._id] = {};
+        }
       }
+
       setGrades(updated);
     } catch (err) {
       console.error(err);
@@ -97,32 +176,51 @@ const AssignGrade = () => {
     }
   };
 
+  // ==================================================
+  // ASSIGN FINAL GRADES
+  // ==================================================
   const handleAssignGrades = async () => {
     try {
       await axios.post(`${backendUrl}/grade/assign-bulk`, { offeringId });
 
       const updated = {};
       for (const enr of enrollments) {
-        const g = await axios.get(`${backendUrl}/grade/enrollment/${enr._id}`);
-        updated[enr._id] = g.data.gradeDetails || {};
+        try {
+          const g = await axios.get(
+            `${backendUrl}/grade/enrollment/${enr._id}`
+          );
+          updated[enr._id] = g.data.gradeDetails || {};
+        } catch {
+          updated[enr._id] = {};
+        }
       }
-      setGrades(updated);
 
+      setGrades(updated);
       alert("Relative grades assigned successfully!");
     } catch {
       alert("Failed to assign grades");
     }
   };
 
+  useEffect(() => {
+  const s = calculateSummary(grades);
+  setSummary(s);
+}, [grades]);
+
+  // ==================================================
+  // UI
+  // ==================================================
   return (
     <>
       <Navbar />
+
       <div className="min-h-screen bg-gray-50 text-gray-800 px-6 py-10">
         <h1 className="text-3xl font-bold text-center mb-10 text-indigo-700">
           Assign Grades
         </h1>
 
-        <div className="mb-6 text-center flex justify-center items-center gap-4">
+        {/* CONTROLS */}
+        <div className="mb-6 flex justify-center gap-4">
           <select
             value={selectedExam}
             onChange={(e) => setSelectedExam(e.target.value)}
@@ -138,16 +236,63 @@ const AssignGrade = () => {
 
           <button
             onClick={handleAssignGrades}
-            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700"
+            className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 cursor-pointer"
           >
             Assign Final Grades
           </button>
         </div>
 
+        {/* SUMMARY SECTION (VISIBLE ONLY AFTER GRADES ARE ASSIGNED) */}
+{summary && (
+  <div className="max-w-5xl mx-auto mb-8 bg-white shadow rounded-lg p-6 border">
+    <h2 className="text-xl font-bold mb-4 text-indigo-700">
+      Grade Summary
+    </h2>
+
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+      <div>
+        <p className="text-sm text-gray-500">Total Students</p>
+        <p className="text-lg font-semibold">{summary.totalStudents}</p>
+      </div>
+
+      <div>
+        <p className="text-sm text-gray-500">Mean</p>
+        <p className="text-lg font-semibold">{summary.mean}</p>
+      </div>
+
+      <div>
+        <p className="text-sm text-gray-500">Std Deviation</p>
+        <p className="text-lg font-semibold">{summary.stdDev}</p>
+      </div>
+
+      <div>
+        <p className="text-sm text-gray-500">Pass / Fail</p>
+        <p className="text-lg font-semibold">
+          {summary.passed} / {summary.failed}
+        </p>
+      </div>
+    </div>
+
+    <div className="grid grid-cols-3 md:grid-cols-6 gap-4 text-center">
+      {Object.entries(summary.gradeCounts).map(([grade, count]) => (
+        <div
+          key={grade}
+          className="bg-gray-100 rounded p-3 font-semibold"
+        >
+          <p className="text-sm text-gray-500">{grade}</p>
+          <p className="text-lg">{count}</p>
+        </div>
+      ))}
+    </div>
+  </div>
+)}
+
+
+        {/* BULK UPLOAD */}
         {selectedExam && (
           <div className="bg-blue-50 p-4 rounded-md shadow max-w-2xl mx-auto mb-6">
             <p className="font-semibold mb-2">
-              Enter {enrollments.length} marks comma/space separated:
+              Enter {enrollments.length} marks (comma/space separated):
             </p>
             <textarea
               rows={3}
@@ -158,22 +303,24 @@ const AssignGrade = () => {
             />
             <button
               onClick={handleBulkUpload}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded mt-3 font-semibold"
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white py-2 rounded mt-3 font-semibold cursor-pointer"
             >
-              Upload All Marks in One Click
+              Upload All Marks 
             </button>
           </div>
         )}
 
+        {/* TABLE */}
         <div className="overflow-x-auto">
-          <table className="min-w-full border border-gray-300">
+          <table className="min-w-full border border-gray-300 bg-white">
             <thead className="bg-gray-100">
               <tr>
                 <th className="border px-4 py-2">Student ID</th>
                 <th className="border px-4 py-2">Name</th>
                 {selectedExam ? (
                   <th className="border px-4 py-2">
-                    {selectedExam.charAt(0).toUpperCase() + selectedExam.slice(1)}
+                    {selectedExam.charAt(0).toUpperCase() +
+                      selectedExam.slice(1)}
                   </th>
                 ) : (
                   <>
@@ -187,8 +334,12 @@ const AssignGrade = () => {
             <tbody>
               {enrollments.map((enr) => (
                 <tr key={enr._id}>
-                  <td className="border px-4 py-2">{enr.student.collegeId}</td>
-                  <td className="border px-4 py-2">{enr.student.name}</td>
+                  <td className="border px-4 py-2">
+                    {enr.student?.collegeId}
+                  </td>
+                  <td className="border px-4 py-2">
+                    {enr.student?.name}
+                  </td>
 
                   {selectedExam ? (
                     <td className="border px-4 py-2">
@@ -198,15 +349,23 @@ const AssignGrade = () => {
                         max="100"
                         value={grades[enr._id]?.[selectedExam] ?? ""}
                         onChange={(e) =>
-                          handleGradeChange(enr._id, selectedExam, e.target.value)
+                          handleGradeChange(
+                            enr._id,
+                            selectedExam,
+                            e.target.value
+                          )
                         }
                         className="border px-2 py-1 rounded w-20"
                       />
                     </td>
                   ) : (
                     <>
-                      <td className="border px-4 py-2">{grades[enr._id]?.total ?? "-"}</td>
-                      <td className="border px-4 py-2">{grades[enr._id]?.letterGrade ?? "-"}</td>
+                      <td className="border px-4 py-2">
+                        {grades[enr._id]?.total ?? "-"}
+                      </td>
+                      <td className="border px-4 py-2">
+                        {grades[enr._id]?.letterGrade ?? "-"}
+                      </td>
                     </>
                   )}
                 </tr>

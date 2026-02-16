@@ -2,55 +2,93 @@ import Grade from "../models/Grade.js";
 import Enrollment from "../models/Enrollment.js";
 import Faculty from "../models/Faculty.js";
 import CourseOffering from "../models/CourseOffering.js";
-import { sendEmail } from "../utils/emailService.js";
 import Course from "../models/Course.js";
+// import { sendEmail } from "../utils/emailService.js";
 
-// ⭐ Converts letter grades to grade points
+/*
+====================================================
+LETTER GRADE → GRADE POINTS (AA SYSTEM)
+====================================================
+*/
 const letterToPoints = (g) => {
   switch (g) {
-    case "A+": return 10;
-    case "A": return 9;
-    case "B+": return 8;
-    case "B": return 7;
-    case "C": return 6;
-    case "D": return 5;
+    case "AA": return 10;
+    case "AB": return 9;
+    case "BB": return 8;
+    case "BC": return 7;
+    case "CC": return 6;
+    case "CD": return 5;
+    case "DD": return 4;
     case "F": return 0;
     default: return 0;
   }
 };
 
-// ==================================================================
-// Create grade for a student enrollment
-// ==================================================================
+const gradeRank = {
+  AA: 7,
+  AB: 6,
+  BB: 5,
+  BC: 4,
+  CC: 3,
+  CD: 2,
+  DD: 1,
+  F: 0,
+};
+
+const absoluteGradeFloor = (total) => {
+  if (total >= 80) return "AA";
+  if (total >= 70) return "AB";
+  if (total >= 60) return "BC";
+  if (total >= 50) return "CC";
+  if (total >= 45) return "CD";
+  if (total >= 35) return "DD";
+  return "F";
+};
+
+
+/*
+====================================================
+CREATE GRADE (ONE PER ENROLLMENT)
+====================================================
+*/
 export const createGrade = async (req, res) => {
   try {
     const { enrollmentId } = req.body;
-    if (!enrollmentId) return res.status(400).json({ success: false, message: "Enrollment ID is required" });
+
+    if (!enrollmentId)
+      return res.status(400).json({ success: false, message: "Enrollment ID is required" });
 
     const existingGrade = await Grade.findOne({ enrollment: enrollmentId });
-    if (existingGrade) return res.status(400).json({ success: false, message: "Grade already exists" });
+    if (existingGrade)
+      return res.status(400).json({ success: false, message: "Grade already exists" });
 
-    const newGrade = await Grade.create({ enrollment: enrollmentId });
-    res.status(201).json({ success: true, message: "Grade created successfully", grade: newGrade });
+    const grade = await Grade.create({ enrollment: enrollmentId });
+    return res.status(201).json({ success: true, grade });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Server error" });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
-// ==================================================================
-// Upload marks for a single student
-// ==================================================================
+/*
+====================================================
+UPLOAD MARKS (SINGLE STUDENT)
+====================================================
+*/
 export const uploadMarks = async (req, res) => {
   try {
     const { enrollmentId, type, marks } = req.body;
+
     if (!enrollmentId || !type || marks === undefined)
-      return res.status(400).json({ success: false, message: "Fields Missing" });
+      return res.status(400).json({ success: false, message: "Fields missing" });
 
     const grade = await Grade.findOne({ enrollment: enrollmentId });
-    if (!grade) return res.status(404).json({ success: false, message: "Grade record does not exist" });
+    if (!grade)
+      return res.status(404).json({ success: false, message: "Grade record not found" });
 
     grade[type] = marks;
+
     grade.total =
       (grade.assignments || 0) +
       (grade.quiz || 0) +
@@ -59,29 +97,47 @@ export const uploadMarks = async (req, res) => {
       (grade.endsem || 0);
 
     await grade.save();
-    return res.json({ success: true, message: "Marks updated", grade });
+    return res.json({ success: true, grade });
+
   } catch (error) {
     console.error(error);
-    res.status(500).json({ success: false, message: "Error" });
+    return res.status(500).json({ success: false, message: "Error updating marks" });
   }
 };
 
-// ==================================================================
-// Upload marks in bulk
-// ==================================================================
+/*
+====================================================
+UPLOAD MARKS (BULK)
+====================================================
+*/
 export const uploadMarksBulk = async (req, res) => {
   try {
     const { offeringId, type, data } = req.body;
-    if (!offeringId || !type || !data || !Array.isArray(data) || data.length === 0) {
-      return res.status(400).json({ success: false, message: "Fields missing or invalid" });
+
+    if (!offeringId || !type || !Array.isArray(data)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid payload",
+      });
     }
 
-    const updatedGrades = [];
-    for (let item of data) {
-      const grade = await Grade.findOne({ enrollment: item.enrollmentId });
-      if (!grade) continue;
+    let updatedCount = 0;
 
-      grade[type] = item.marks;
+    for (const item of data) {
+      if (!item.enrollmentId) continue;
+
+      // 🔥 CREATE IF NOT EXISTS + UPDATE IF EXISTS
+      const grade = await Grade.findOneAndUpdate(
+        { enrollment: item.enrollmentId },
+        { $set: { [type]: item.marks } },
+        {
+          new: true,
+          upsert: true, // ✅ creates grade if missing
+          setDefaultsOnInsert: true,
+        }
+      );
+
+      // 🔢 Recalculate total
       grade.total =
         (grade.assignments || 0) +
         (grade.quiz || 0) +
@@ -90,27 +146,55 @@ export const uploadMarksBulk = async (req, res) => {
         (grade.endsem || 0);
 
       await grade.save();
-      updatedGrades.push(grade);
+      updatedCount++;
     }
 
-    return res.json({ success: true, message: "Bulk marks uploaded successfully", updatedGrades });
+    return res.json({
+      success: true,
+      message: "Bulk marks uploaded successfully",
+      updatedCount,
+    });
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ success: false, message: "Server error" });
+    // 🔒 Handle duplicate key race condition safely
+    if (error.code === 11000) {
+      return res.status(409).json({
+        success: false,
+        message: "Duplicate grade detected (race condition)",
+      });
+    }
+
+    console.error("uploadMarksBulk error:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
   }
 };
 
-// ==================================================================
-// ⭐ Assign relative grades — UPDATED LOGIC
-// ==================================================================
+
+/*
+====================================================
+ASSIGN FINAL GRADES (AA / AB SYSTEM)
+RULES:
+- TOTAL < 35 → F
+- AA → TOTAL ≥ 80 AND top 10%
+- Relative grading among PASSED students
+====================================================
+*/
 export const assignGradesInBulk = async (req, res) => {
   try {
     const { offeringId } = req.body;
+
     if (!offeringId)
-      return res.status(400).json({ success: false, message: "Offering ID is required" });
+      return res.status(400).json({ success: false, message: "Offering ID required" });
 
     const offering = await CourseOffering.findById(offeringId);
+    if (!offering)
+      return res.status(404).json({ success: false, message: "Offering not found" });
+
     const course = await Course.findById(offering.course);
+    if (!course)
+      return res.status(404).json({ success: false, message: "Course not found" });
 
     const enrollments = await Enrollment.find({ offering: offeringId }).select("_id student");
     const enrollmentIds = enrollments.map(e => e._id);
@@ -118,136 +202,140 @@ export const assignGradesInBulk = async (req, res) => {
     const grades = await Grade.find({ enrollment: { $in: enrollmentIds } })
       .populate({ path: "enrollment", populate: { path: "student" } });
 
-    // Sort by score descending
-    const sorted = grades.sort((a, b) => (b.total || 0) - (a.total || 0));
-    const n = sorted.length;
+    // Sort by total (descending)
+    grades.sort((a, b) => (b.total || 0) - (a.total || 0));
 
-    // Percentage buckets
-    const pAplus = Math.ceil(n * 0.08);
-    const pA = Math.ceil(n * 0.12);
-    const pBplus = Math.ceil(n * 0.15);
-    const pC = Math.ceil(n * 0.12);
-    const pD = Math.ceil(n * 0.08);
+    const passed = grades.filter(g => (g.total || 0) >= 35);
+    const failed = grades.filter(g => (g.total || 0) < 35);
 
-    for (let i = 0; i < n; i++) {
-      const g = sorted[i];
-      const score = g.total || 0;
+    const n = passed.length;
 
-      // Rule 1: Fail
-      if (score < 35) {
-        g.letterGrade = "F";
-        g.gradePoints = 0;
-      }
-      // A+ only if score >= 85 and ranking in top 8%
-      else if (score >= 85 && i < pAplus) {
-        g.letterGrade = "A+";
-        g.gradePoints = 10;
-      }
-      else if (i < pAplus + pA) {
-        g.letterGrade = "A";
-        g.gradePoints = 9;
-      }
-      else if (i < pAplus + pA + pBplus) {
-        g.letterGrade = "B+";
-        g.gradePoints = 8;
-      }
-      // B majority
-      else if (i < pAplus + pA + pBplus + Math.ceil(n * 0.45)) {
-        g.letterGrade = "B";
-        g.gradePoints = 7;
-      }
-      else if (i < pAplus + pA + pBplus + Math.ceil(n * 0.45) + pC) {
-        g.letterGrade = "C";
-        g.gradePoints = 6;
-      }
-      else if (i < pAplus + pA + pBplus + Math.ceil(n * 0.45) + pC + pD) {
-        g.letterGrade = "D";
-        g.gradePoints = 5;
-      }
-      else {
-        g.letterGrade = "B"; // fallback
-        g.gradePoints = 7;
-      }
+    const aaCut = Math.ceil(n * 0.10);
+    const abCut = aaCut + Math.ceil(n * 0.20);
+    const bbCut = abCut + Math.ceil(n * 0.20);
+    const bcCut = bbCut + Math.ceil(n * 0.30);
+    const ccCut = bcCut + Math.ceil(n*0.08);
+    const cdCut =ccCut +  Math.ceil(n*0.04);
+    // Remaining → CC
 
-      await g.save();
+    passed.forEach((g, i) => {
+      if (i < aaCut && g.total >= 80) g.letterGrade = "AA";
+      else if (i < abCut  ) g.letterGrade = "AB";
+      else if (i < bbCut || g.total >=65 ) g.letterGrade = "BB";
+      else if (i < bcCut || g.total>= 55) g.letterGrade = "BC";
+      else if (i < ccCut || g.total>=45 ) g.letterGrade = "CC";
+      else if (i < cdCut || g.total>=40) g.letterGrade="CD";
+      else g.letterGrade="DD";
 
-      const student = g.enrollment.student;
-      // await sendEmail({
-      //   to: student.email,
-      //   subject: `Final Grade Assigned - Course ${course.code}`,
-      //   html: `
-      //     <div style="font-family:Arial">
-      //       <h3>Your Final Grade</h3>
-      //       <p>Hi <strong>${student.name}</strong>,</p>
-      //       <p>Your final result for <strong>${course.code}</strong> has been published.</p>
-      //       <p><strong>Total Marks:</strong> ${score}</p>
-      //       <p><strong>Letter Grade:</strong> ${g.letterGrade}</p>
-      //       <p><strong>Grade Points:</strong> ${g.gradePoints}</p>
-      //     </div>
-      //   `
-      // });
-    }
+      g.gradePoints = letterToPoints(g.letterGrade);
+    });
 
-    return res.json({ success: true, message: "Grades assigned successfully", updatedGrades: grades });
-  } catch (err) {
-    console.error("Error in assignGradesInBulk:", err);
-    return res.status(500).json({ success: false, message: "Error assigning grades" });
+    failed.forEach(g => {
+      g.letterGrade = "F";
+      g.gradePoints = 0;
+    });
+
+    await Promise.all(grades.map(g => g.save()));
+
+    return res.json({
+      success: true,
+      message: "Grades assigned successfully (AA system)",
+      summary: {
+        totalStudents: grades.length,
+        passed: passed.length,
+        failed: failed.length,
+        AA: passed.filter(g => g.letterGrade === "AA").length
+      }
+    });
+
+  } catch (error) {
+    console.error("assignGradesInBulk error:", error);
+    return res.status(500).json({ success: false, message: "Grade assignment failed" });
   }
 };
 
-
-// ==================================================================
-// Utility functions: get/update grades
-// ==================================================================
+/*
+====================================================
+GET GRADE BY ENROLLMENT
+====================================================
+*/
 export const getGradesByEnrollment = async (req, res) => {
   try {
     const { enrollmentId } = req.params;
+
     const gradeDetails = await Grade.findOne({ enrollment: enrollmentId });
-    if (!gradeDetails) return res.status(404).json({ success: false, message: "No grade record found" });
+    if (!gradeDetails)
+      return res.status(404).json({ success: false, message: "No grade record found" });
+
     return res.json({ success: true, gradeDetails });
+
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: "Error" });
   }
 };
 
+/*
+====================================================
+GET GRADES BY OFFERING
+====================================================
+*/
 export const getGradesByOffering = async (req, res) => {
   try {
     const { offeringId } = req.params;
-    const enrollments = await Enrollment.find({ offering: offeringId }).select("_id student");
+
+    const enrollments = await Enrollment.find({ offering: offeringId }).select("_id");
     const enrollmentIds = enrollments.map(e => e._id);
+
     const grades = await Grade.find({ enrollment: { $in: enrollmentIds } })
-      .populate("enrollment")
-      .populate("student");
+      .populate({ path: "enrollment", populate: { path: "student" } });
+
     return res.json({ success: true, grades });
+
   } catch (error) {
     console.error(error);
     return res.status(500).json({ success: false, message: "Error" });
   }
 };
 
+/*
+====================================================
+UPDATE GRADE (MANUAL EDIT)
+====================================================
+*/
 export const updateGrade = async (req, res) => {
   try {
-    const { gradeId, newAssignments, newMidSem, newEndSem, newQuiz, newProject } = req.body;
-    const updated = await Grade.findByIdAndUpdate(
+    const {
       gradeId,
-      { assignments: newAssignments, midsem: newMidSem, endsem: newEndSem, quiz: newQuiz, project: newProject },
-      { new: true }
-    );
+      newAssignments,
+      newQuiz,
+      newProject,
+      newMidSem,
+      newEndSem
+    } = req.body;
 
-    if (!updated) return res.status(404).json({ success: false, message: "Grade update failed" });
+    const grade = await Grade.findById(gradeId);
+    if (!grade)
+      return res.status(404).json({ success: false, message: "Grade not found" });
 
-    updated.total =
-      (updated.assignments || 0) +
-      (updated.quiz || 0) +
-      (updated.project || 0) +
-      (updated.midsem || 0) +
-      (updated.endsem || 0);
+    if (newAssignments !== undefined) grade.assignments = newAssignments;
+    if (newQuiz !== undefined) grade.quiz = newQuiz;
+    if (newProject !== undefined) grade.project = newProject;
+    if (newMidSem !== undefined) grade.midsem = newMidSem;
+    if (newEndSem !== undefined) grade.endsem = newEndSem;
 
-    await updated.save();
-    return res.json({ success: true, updated });
+    grade.total =
+      (grade.assignments || 0) +
+      (grade.quiz || 0) +
+      (grade.project || 0) +
+      (grade.midsem || 0) +
+      (grade.endsem || 0);
+
+    await grade.save();
+    return res.json({ success: true, grade });
+
   } catch (error) {
     console.error(error);
-    return res.status(500).json({ success: false, message: "Error" });
+    return res.status(500).json({ success: false, message: "Error updating grade" });
   }
 };

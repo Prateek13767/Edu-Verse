@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 
 const HostelSchema = new mongoose.Schema({
-
   // Basic identity
   name: {
     type: String,
@@ -16,7 +15,7 @@ const HostelSchema = new mongoose.Schema({
 
   type: {
     type: String,
-    enum: ["boys", "girls", "mixed"],
+    enum: ["boys", "girls"],
     required: true,
   },
 
@@ -24,6 +23,10 @@ const HostelSchema = new mongoose.Schema({
   warden: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Warden",
+  },
+
+  caretaker:{
+    type: String
   },
 
   // Stats (updated automatically when rooms & allotments happen)

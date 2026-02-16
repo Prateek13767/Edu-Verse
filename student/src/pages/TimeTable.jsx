@@ -11,6 +11,7 @@ const TimeTable = () => {
 
   const days = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday"];
   const timeSlots = [
+    "08:00-09:00",
     "09:00-10:00",
     "10:00-11:00",
     "11:00-12:00",

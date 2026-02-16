@@ -22,13 +22,13 @@ const RoomSchema = new mongoose.Schema(
     },
 
     roomIndex: {
-      type: String, // 01, 02, 05 etc.
+      type: String,
       required: true,
       trim: true,
     },
 
     formattedRoom: {
-      type: String, // A-205
+      type: String,
       required: true,
     },
 
@@ -42,40 +42,55 @@ const RoomSchema = new mongoose.Schema(
       default: 0,
     },
 
-    students: [{ type: mongoose.Schema.Types.ObjectId, ref: "Student" }],
-
     status: {
       type: String,
       enum: ["active", "maintenance", "closed"],
       default: "active",
     },
 
-    // 🪑 Room Assets
+    // 🪑 Room Assets (count auto-filled = capacity)
     assets: {
       bed: {
-        count: { type: Number, default: 0 },
+        count: { type: Number },
         condition: { type: String, enum: assetConditionEnum, default: "good" },
       },
       chair: {
-        count: { type: Number, default: 0 },
+        count: { type: Number },
         condition: { type: String, enum: assetConditionEnum, default: "good" },
       },
       table: {
-        count: { type: Number, default: 0 },
+        count: { type: Number },
         condition: { type: String, enum: assetConditionEnum, default: "good" },
       },
       cupboard: {
-        count: { type: Number, default: 0 },
+        count: { type: Number },
         condition: { type: String, enum: assetConditionEnum, default: "good" },
       },
       fan: {
-        count: { type: Number, default: 0 },
+        count: { type: Number },
         condition: { type: String, enum: assetConditionEnum, default: "good" },
       },
     },
   },
   { timestamps: true }
 );
+
+// 🔥 Auto-generate default asset counts based on capacity
+RoomSchema.pre("validate", function (next) {
+  if (this.capacity) {
+    const cap = this.capacity;
+
+    this.assets = {
+      bed: { count: cap, condition: this.assets?.bed?.condition || "good" },
+      chair: { count: cap, condition: this.assets?.chair?.condition || "good" },
+      table: { count: cap, condition: this.assets?.table?.condition || "good" },
+      cupboard: { count: cap, condition: this.assets?.cupboard?.condition || "good" },
+      fan: { count: cap, condition: this.assets?.fan?.condition || "good" },
+    };
+  }
+
+  next();
+});
 
 // 🔥 Prevent duplicate formattedRoom in the same hostel
 RoomSchema.index({ hostel: 1, formattedRoom: 1 }, { unique: true });

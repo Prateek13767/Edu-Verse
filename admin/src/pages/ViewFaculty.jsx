@@ -21,13 +21,13 @@ const ViewFaculty = () => {
     "Mechanical Engineering",
     "Civil Engineering",
     "Chemical Engineering",
-    "Metallurgical & Materials Engineering",
+    "Metallurgical and Materials Engineering",
     "Architecture & Planning",
     "Management Studies",
     "Physics",
     "Chemistry",
     "Mathematics",
-    "Humanities & Social Sciences",
+    "Humanities and Social Sciences",
   ];
 
   // 🔹 FIXED FULL DESIGNATIONS LIST

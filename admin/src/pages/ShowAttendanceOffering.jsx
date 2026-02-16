@@ -23,10 +23,12 @@ const ShowAttendanceOffering = () => {
         `http://localhost:3000/enrollment/offering/${offeringId}`
       );
 
+
       if (res.data.success) setOffering(res.data.offeringDetails);
       if (res2.data.success) {
         const enrollData = res2.data.enrollments;
-
+        console.log(enrollData);
+        
         // Fetch attendance % for each enrollment
         const enriched = await Promise.all(
           enrollData.map(async (en) => {

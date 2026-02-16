@@ -1,8 +1,9 @@
 import express from "express";
-import { adminLogin } from "../controllers/AdminController.js";
+import { adminLogin, generateResultsForAllStudents } from "../controllers/AdminController.js";
 
 const adminRouter = express.Router();
 
 adminRouter.post("/login", adminLogin);
+adminRouter.post("/generate-result",generateResultsForAllStudents);
 
 export default adminRouter;

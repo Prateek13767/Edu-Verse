@@ -1,11 +1,11 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar";
 import Sidebar from "../components/Sidebar";
 import Footer from "../components/Footer";
 
-const StudentsList = () => {
+const AccessGradeSheets = () => {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -13,7 +13,7 @@ const StudentsList = () => {
   const [branchFilter, setBranchFilter] = useState("All");
   const [semFilter, setSemFilter] = useState("All");
 
-  const navigate = useNavigate();   // 🔥 for redirect
+  const navigate = useNavigate();
 
   const branches = [
     "All",
@@ -40,13 +40,15 @@ const StudentsList = () => {
       const res = await axios.get("http://localhost:3000/student/", {
         headers: { Authorization: `Bearer ${token}` },
       });
+
       if (res.data.success) {
         setStudents(res.data.students);
       }
     } catch (err) {
-      console.log(err);
+      console.error("Fetch students error:", err);
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
   useEffect(() => {
@@ -60,8 +62,11 @@ const StudentsList = () => {
       s.collegeId.toLowerCase().includes(search.toLowerCase()) ||
       s.department.toLowerCase().includes(search.toLowerCase());
 
-    const matchesBranch = branchFilter === "All" || s.department === branchFilter;
-    const matchesSem = semFilter === "All" || s.currentSem === semFilter;
+    const matchesBranch =
+      branchFilter === "All" || s.department === branchFilter;
+
+    const matchesSem =
+      semFilter === "All" || s.currentSem === Number(semFilter);
 
     return matchesSearch && matchesBranch && matchesSem;
   });
@@ -71,12 +76,12 @@ const StudentsList = () => {
       <Navbar />
 
       <div className="flex">
-        <Sidebar />
+        <Sidebar active="students" />
 
         <div className="flex-1 p-10 bg-gray-100 min-h-screen">
           <h1 className="text-3xl font-bold mb-6">View Students</h1>
 
-          {/* Search + Filters */}
+          {/* 🔍 Search + Filters */}
           <div className="mb-8 grid grid-cols-1 md:grid-cols-4 gap-4">
             <input
               type="text"
@@ -92,48 +97,60 @@ const StudentsList = () => {
               className="px-4 py-2 border rounded-md"
             >
               {branches.map((b) => (
-                <option key={b}>{b}</option>
+                <option key={b} value={b}>
+                  {b}
+                </option>
               ))}
             </select>
 
             <select
               value={semFilter}
-              onChange={(e) => setSemFilter(parseInt(e.target.value) || "All")}
+              onChange={(e) => setSemFilter(e.target.value)}
               className="px-4 py-2 border rounded-md"
             >
               {semesters.map((sem) => (
-                <option key={sem}>{sem}</option>
+                <option key={sem} value={sem}>
+                  {sem}
+                </option>
               ))}
             </select>
           </div>
 
+          {/* 📋 Table */}
           <div className="bg-white shadow-md rounded-xl overflow-hidden">
             <table className="w-full table-auto border-collapse">
               <thead className="bg-indigo-100 text-indigo-800">
                 <tr>
-                  <th className="px-4 py-3 text-left w-40">Name</th>
-                  <th className="px-4 py-3 text-left w-56">Email</th>
-                  <th className="px-4 py-3 text-left w-32">College ID</th>
-                  <th className="px-4 py-3 text-left w-56">Branch</th>
-                  <th className="px-4 py-3 text-left w-24">Current Sem</th>
+                  <th className="px-4 py-3 text-left">Name</th>
+                  <th className="px-4 py-3 text-left">Email</th>
+                  <th className="px-4 py-3 text-left">College ID</th>
+                  <th className="px-4 py-3 text-left">Branch</th>
+                  <th className="px-4 py-3 text-left">Current Sem</th>
                 </tr>
               </thead>
 
               <tbody>
                 {loading ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-6">Loading...</td>
+                    <td colSpan="5" className="text-center py-6">
+                      Loading...
+                    </td>
                   </tr>
                 ) : filteredStudents.length === 0 ? (
                   <tr>
-                    <td colSpan="6" className="text-center py-6">No students found.</td>
+                    <td colSpan="5" className="text-center py-6">
+                      No students found.
+                    </td>
                   </tr>
                 ) : (
                   filteredStudents.map((s) => (
                     <tr
                       key={s._id}
+                      title="Click to view grade sheets"
                       className="border-b hover:bg-indigo-50 cursor-pointer transition"
-                      onClick={() => navigate(`/admin/gradesheets/${s._id}`)}   // 🔥 redirect
+                      onClick={() =>
+                        navigate(`/admin/gradesheets/${s._id}`)
+                      }
                     >
                       <td className="px-4 py-3">{s.name}</td>
                       <td className="px-4 py-3">{s.email}</td>
@@ -154,4 +171,4 @@ const StudentsList = () => {
   );
 };
 
-export default StudentsList;
+export default AccessGradeSheets;

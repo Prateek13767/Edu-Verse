@@ -1,7 +1,7 @@
 import mongoose from "mongoose";
 import Enrollment from "../models/Enrollment.js";
 import CourseOffering from "../models/CourseOffering.js";
-import Student from "../models/student.js";
+import Student from "../models/Student.js";
 import Faculty from "../models/Faculty.js";
 import { sendEmail } from "../utils/emailService.js";
 
@@ -147,11 +147,11 @@ const addBulkEnrollments = async (req, res) => {
       </p>
     `;
 
-    await sendEmail({
-      to: studentData.email,
-      subject: "Bulk Enrollment Successful",
-      html
-    });
+    // await sendEmail({
+    //   to: studentData.email,
+    //   subject: "Bulk Enrollment Successful",
+    //   html
+    // });
 
     return res.json({
       success: true,
@@ -238,7 +238,7 @@ const getEnrollmentsByOffering = async (req, res) => {
       offering: req.params.offeringId,
       status: { $in: ["approved", "selected", "completed", "Attendance Failure", "Supplementary"] }
     })
-      .populate("student", "name email collegeId")
+      .populate("student", "name email collegeId batch department cgpa ")
       .populate("faculty", "name email");
 
     return res.json({ success: true, enrollments });
@@ -331,18 +331,26 @@ const assignFacultyAndSchedule = async (req, res) => {
     if (!facultyId)
       return res.json({ success: false, message: "Faculty ID missing" });
 
-    if (!Array.isArray(schedules) || schedules.length === 0)
-      return res.json({ success: false, message: "Schedules missing" });
+    // ✅ schedules is OPTIONAL
+    let finalSchedules = [];
 
-    for (const s of schedules) {
-      if (!s.day || !s.startTime || !s.endTime || !s.room)
-        return res.json({ success: false, message: "Schedules contain empty fields" });
+    if (Array.isArray(schedules) && schedules.length > 0) {
+      for (const s of schedules) {
+        if (!s.day || !s.startTime || !s.endTime || !s.room)
+          return res.json({
+            success: false,
+            message: "Schedules contain empty fields",
+          });
+      }
+      finalSchedules = schedules;
     }
 
-    const enrollments = await Enrollment.find({ _id: { $in: enrollmentIds } })
+    const enrollments = await Enrollment.find({
+      _id: { $in: enrollmentIds },
+    })
       .populate({
         path: "offering",
-        populate: { path: "instructors course" }
+        populate: { path: "instructors course" },
       })
       .populate("student", "name email");
 
@@ -351,13 +359,16 @@ const assignFacultyAndSchedule = async (req, res) => {
 
     const offering = enrollments[0].offering;
 
-    // 🔥 FIX — supporting both ObjectIds & populated instructors
-    const instructorIds = offering.instructors.map(i =>
+    // 🔥 supports ObjectIds & populated instructors
+    const instructorIds = offering.instructors.map((i) =>
       i?._id ? i._id.toString() : i.toString()
     );
 
     if (!instructorIds.includes(facultyId.toString()))
-      return res.json({ success: false, message: "Selected faculty does not belong to this offering" });
+      return res.json({
+        success: false,
+        message: "Selected faculty does not belong to this offering",
+      });
 
     // 🔥 Update records
     const updateResult = await Enrollment.updateMany(
@@ -365,51 +376,31 @@ const assignFacultyAndSchedule = async (req, res) => {
       {
         $set: {
           faculty: facultyId,
-          schedule: schedules,
-          status: "approved"
-        }
+          schedule: finalSchedules, // ✅ may be empty
+          status: "approved",
+        },
       }
     );
 
     if (!updateResult.acknowledged)
       return res.json({ success: false, message: "Database update failed" });
 
-    // 📩 Email notification
-    const faculty = await Faculty.findById(facultyId).select("name email");
-
-    // for (const e of enrollments) {
-    //   const html = `
-    //     <h2>Schedule Assigned</h2>
-    //     <p>Dear <b>${e.student.name}</b>,</p>
-    //     <p>Your schedule for <b>${offering.course.name}</b> has been updated.</p>
-    //     <p><b>Faculty:</b> ${faculty.name}</p>
-    //     <ul>
-    //       ${schedules
-    //         .map(s => `<li>${s.day}, ${s.startTime} – ${s.endTime} (Room ${s.room})</li>`)
-    //         .join("")}
-    //     </ul>
-    //   `;
-    //   await sendEmail({
-    //     to: e.student.email,
-    //     subject: "Schedule Assigned",
-    //     html
-    //   });
-    // }
-
     return res.json({
       success: true,
-      message: "Faculty & schedule assigned successfully 🎉"
+      message: finalSchedules.length
+        ? "Faculty & schedule assigned successfully 🎉"
+        : "Faculty assigned successfully 🎉",
     });
-
   } catch (err) {
     console.error("❌ Backend error:", err);
     return res.status(500).json({
       success: false,
       message: "Something went wrong in assignFacultyAndSchedule",
-      error: err.message
+      error: err.message,
     });
   }
 };
+
 
 
 

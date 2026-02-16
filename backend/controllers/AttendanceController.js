@@ -141,14 +141,14 @@ const markAttendanceforAll = async (req, res) => {
       `;
 
       // Debug log before sending
-      console.log("Sending attendance email to:", student.email);
+      //console.log("Sending attendance email to:", student.email);
 
       // Send email
-      await sendEmail({
-        to: student.email,
-        subject: "Attendance Updated",
-        html
-      });
+      // await sendEmail({
+      //   to: student.email,
+      //   subject: "Attendance Updated",
+      //   html
+      // });
     }
 
     return res.json({ success: true, message: "Attendance marked and emails sent to students" });
